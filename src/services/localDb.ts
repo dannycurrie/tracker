@@ -1,5 +1,5 @@
 import { createKV } from '../utils/storage';
-import { Metric, LogEntry, MetricType, MetricTimeframe, PendingLogEntry } from '../types';
+import { Metric, LogEntry, MetricType, MetricTimeframe, MetricSource, PendingLogEntry } from '../types';
 
 const storage = createKV('local-db');
 
@@ -13,9 +13,9 @@ function hoursAgo(h: number): string {
 
 function buildSeedMetrics(): Metric[] {
   return [
-    { id: 'mock-1', name: 'Cups of coffee', type: 'cumulative', timeframe: 'weekly',  display_order: 0, created_at: hoursAgo(72) },
-    { id: 'mock-2', name: 'Reading',         type: 'timed',       timeframe: 'weekly',  display_order: 1, created_at: hoursAgo(72) },
-    { id: 'mock-3', name: 'Sleep quality',   type: 'average',     timeframe: 'monthly', display_order: 2, created_at: hoursAgo(72) },
+    { id: 'mock-1', name: 'Cups of coffee', type: 'cumulative', timeframe: 'weekly',  source: 'user', display_order: 0, created_at: hoursAgo(72) },
+    { id: 'mock-2', name: 'Reading',         type: 'timed',       timeframe: 'weekly',  source: 'user', display_order: 1, created_at: hoursAgo(72) },
+    { id: 'mock-3', name: 'Sleep quality',   type: 'average',     timeframe: 'monthly', source: 'user', display_order: 2, created_at: hoursAgo(72) },
   ];
 }
 
@@ -68,7 +68,7 @@ export const localDb = {
     return readMetrics();
   },
 
-  createMetric(name: string, type: MetricType, timeframe: MetricTimeframe): Metric {
+  createMetric(name: string, type: MetricType, timeframe: MetricTimeframe, source: MetricSource = 'user'): Metric {
     const metrics = readMetrics();
     const nextOrder = metrics.length > 0 ? Math.max(...metrics.map((m) => m.display_order)) + 1 : 0;
     const metric: Metric = {
@@ -76,6 +76,7 @@ export const localDb = {
       name,
       type,
       timeframe,
+      source,
       display_order: nextOrder,
       created_at: new Date().toISOString(),
     };
@@ -101,5 +102,19 @@ export const localDb = {
       ...entries,
       { ...entry, created_at: new Date().toISOString() },
     ]);
+  },
+
+  deleteLogEntriesForPeriod(metricId: string, periodStart: Date, periodEnd: Date): void {
+    const entries = readEntries();
+    writeEntries(
+      entries.filter(
+        (e) =>
+          !(
+            e.metric_id === metricId &&
+            new Date(e.logged_at) >= periodStart &&
+            new Date(e.logged_at) < periodEnd
+          )
+      )
+    );
   },
 };

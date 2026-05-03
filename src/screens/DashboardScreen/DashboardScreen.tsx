@@ -30,12 +30,20 @@ export function DashboardScreen({ navigation }: Props) {
 
       <View style={styles.header}>
         <Text style={styles.title}>My Metrics</Text>
-        <TouchableOpacity
-          style={styles.addBtn}
-          onPress={() => navigation.navigate('AddMetric')}
-        >
-          <Text style={styles.addBtnText}>+ Add</Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => navigation.navigate('Settings')}
+          >
+            <Text style={styles.iconBtnText}>⚙</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.addBtn}
+            onPress={() => navigation.navigate('AddMetric')}
+          >
+            <Text style={styles.addBtnText}>+ Add</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {isLoading ? (
@@ -73,6 +81,9 @@ const styles = StyleSheet.create({
     borderBottomColor: '#ddd',
   },
   title: { fontSize: 22, fontWeight: '700', color: '#111' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  iconBtn: { padding: 6 },
+  iconBtnText: { fontSize: 20, color: '#555' },
   addBtn: {
     backgroundColor: '#007AFF',
     borderRadius: 8,
