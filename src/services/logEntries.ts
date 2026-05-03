@@ -77,6 +77,31 @@ export async function insertLogEntry(params: InsertLogEntryParams): Promise<void
   invalidatePeriodEntries(metricId);
 }
 
+export async function deleteLogEntriesForPeriod(
+  metricId: string,
+  periodStart: Date,
+  periodEnd: Date
+): Promise<void> {
+  if (isLocalMode) {
+    localDb.deleteLogEntriesForPeriod(metricId, periodStart, periodEnd);
+    invalidatePeriodEntries(metricId);
+    return;
+  }
+
+  const { error } = await supabase!
+    .from('log_entries')
+    .delete()
+    .eq('metric_id', metricId)
+    .gte('logged_at', periodStart.toISOString())
+    .lt('logged_at', periodEnd.toISOString());
+
+  if (error) {
+    logger.error('Failed to delete log entries for period', error, { metricId });
+    throw error;
+  }
+  invalidatePeriodEntries(metricId);
+}
+
 function invalidatePeriodEntries(metricId: string): void {
   queryClient.invalidateQueries({ queryKey: ['periodEntries', metricId] });
 }

@@ -8,7 +8,13 @@
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.tracker.app"
+      "bundleIdentifier": "com.tracker.app",
+      "entitlements": {
+        "com.apple.developer.healthkit": true
+      },
+      "infoPlist": {
+        "NSHealthShareUsageDescription": "Tracker reads your running workouts to log your distance automatically."
+      }
     },
     "plugins": [
       "expo-secure-store"

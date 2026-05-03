@@ -35,6 +35,7 @@ export function MetricCard({ metric }: MetricCardProps) {
     if (value === null) return metric.type === 'average' ? '—' : '0';
     if (metric.type === 'timed') return `${value} min`;
     if (metric.type === 'average') return value.toFixed(1);
+    if (metric.type === 'cumulative') return value.toFixed(0);
     return String(value);
   })();
 

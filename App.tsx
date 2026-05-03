@@ -7,6 +7,7 @@ import { queryClient } from './src/services/queryClient';
 import { isLocalMode } from './src/config/mode';
 import { logger } from './src/services/logger';
 import { RootStack } from './src/screens';
+import { useHealthSync } from './src/hooks/useHealthSync';
 
 export default function App() {
   const [sessionReady, setSessionReady] = useState(false);
@@ -20,6 +21,8 @@ export default function App() {
       if (error) logger.error('Failed to restore session', error);
     }).finally(() => setSessionReady(true));
   }, []);
+
+  useHealthSync();
 
   if (!sessionReady) return null;
 
