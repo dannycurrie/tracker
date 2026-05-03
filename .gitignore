@@ -1,0 +1,16 @@
+node_modules/
+.expo/
+dist/
+build/
+*.log
+.env
+.env.local
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+.idea/
+ios/
+android/
+coverage/
