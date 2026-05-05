@@ -19,6 +19,10 @@ const RUNNING_METRIC_ID = 'fcf0a5fd-d8e1-4d82-ac15-3605984bbc10';
 const SLEEP_LAST_SYNC_KEY = 'sleep:last_sync_at';
 const EARLY_WAKEUP_METRIC_ID = '1b0558fb-9594-41db-bb2e-bb0f0621b8fc';
 
+// Mindful session sync
+const MINDFUL_LAST_SYNC_KEY = 'mindful:last_sync_at';
+const MINDFUL_METRIC_ID = '5dab6c51-bd6c-4a14-9047-cb588889dd7b';
+
 interface HealthWorkout {
   id: string;
   distanceKm: number;
@@ -30,6 +34,12 @@ interface HealthWorkout {
 interface RawSleepSample {
   id: string;
   value: string;
+  startDate: string;
+  endDate: string;
+}
+
+// Native getMindfulSession returns only startDate and endDate — no id, no value field
+interface RawMindfulSample {
   startDate: string;
   endDate: string;
 }
@@ -53,6 +63,7 @@ const PERMISSIONS: HealthKitPermissions = {
     read: [
       AppleHealthKit.Constants.Permissions.Workout,
       AppleHealthKit.Constants.Permissions.SleepAnalysis,
+      AppleHealthKit.Constants.Permissions.MindfulSession,
     ],
     write: [],
   },
@@ -176,6 +187,58 @@ export async function syncSleepSessions(): Promise<void> {
   logger.info('Sleep sync complete', { sessions: overnightSessions.length, submitted, queued });
 }
 
+// ─── Mindful sessions ─────────────────────────────────────────────────────────
+
+export async function syncMindfulMinutes(): Promise<void> {
+  if (isLocalMode) return;
+
+  const granted = await requestHealthPermission();
+  if (!granted) return;
+
+  const checkpointStr = storage.getString(MINDFUL_LAST_SYNC_KEY);
+  const checkpoint = checkpointStr
+    ? new Date(checkpointStr)
+    : new Date(Date.now() - NINETY_DAYS_MS);
+
+  logger.info('Mindful sync started', { since: checkpoint.toISOString() });
+
+  const sessions = await queryMindfulSessions(checkpoint);
+  const qualifying = sessions.filter(
+    (s) =>
+      Math.round(
+        (new Date(s.endDate).getTime() - new Date(s.startDate).getTime()) / 60000
+      ) >= 1
+  );
+
+  if (qualifying.length === 0) return;
+
+  let submitted = 0;
+  let queued = 0;
+
+  for (const session of qualifying) {
+    const durationMinutes = Math.round(
+      (new Date(session.endDate).getTime() - new Date(session.startDate).getTime()) / 60000
+    );
+    try {
+      await insertLogEntry({
+        id: session.startDate,
+        metricId: MINDFUL_METRIC_ID,
+        value: durationMinutes,
+        loggedAt: new Date(session.endDate),
+        sessionStartAt: session.startDate,
+      });
+      submitted++;
+    } catch {
+      queued++;
+    }
+  }
+
+  const last = qualifying[qualifying.length - 1];
+  storage.set(MINDFUL_LAST_SYNC_KEY, last.endDate);
+
+  logger.info('Mindful sync complete', { sessions: qualifying.length, submitted, queued });
+}
+
 // ─── Manual resync (Settings) ────────────────────────────────────────────────
 
 async function syncEntriesForMetric(metricId: string, since: Date): Promise<SyncEntry[]> {
@@ -206,6 +269,25 @@ async function syncEntriesForMetric(metricId: string, since: Date): Promise<Sync
         value: 1,
         loggedAt: s.wakeTime,
         sessionStartAt: s.sessionStart.toISOString(),
+      }));
+  }
+
+  if (metricId === MINDFUL_METRIC_ID) {
+    const sessions = await queryMindfulSessions(since);
+    return sessions
+      .filter(
+        (s) =>
+          Math.round(
+            (new Date(s.endDate).getTime() - new Date(s.startDate).getTime()) / 60000
+          ) >= 1
+      )
+      .map((s) => ({
+        id: s.startDate,
+        value: Math.round(
+          (new Date(s.endDate).getTime() - new Date(s.startDate).getTime()) / 60000
+        ),
+        loggedAt: new Date(s.endDate),
+        sessionStartAt: s.startDate,
       }));
   }
 
@@ -246,8 +328,9 @@ export async function resyncAppleHealthMetrics(): Promise<void> {
       });
     }
 
-    const checkpointKey =
-      metric.id === RUNNING_METRIC_ID ? LAST_SYNC_KEY : SLEEP_LAST_SYNC_KEY;
+    let checkpointKey = LAST_SYNC_KEY;
+    if (metric.id === EARLY_WAKEUP_METRIC_ID) checkpointKey = SLEEP_LAST_SYNC_KEY;
+    if (metric.id === MINDFUL_METRIC_ID) checkpointKey = MINDFUL_LAST_SYNC_KEY;
     storage.set(checkpointKey, start.toISOString());
 
     logger.info('Apple Health resync complete', { metricId: metric.id, inserted: entries.length });
@@ -304,6 +387,29 @@ function querySleepRawSamples(since: Date): Promise<RawSleepSample[]> {
       );
 
       resolve(asleepSamples);
+    });
+  });
+}
+
+function queryMindfulSessions(since: Date): Promise<RawMindfulSample[]> {
+  return new Promise((resolve, reject) => {
+    const options = {
+      startDate: since.toISOString(),
+      endDate: new Date().toISOString(),
+    };
+
+    // Native always returns descending by endDate regardless of ascending option — sort in JS
+    AppleHealthKit.getMindfulSession(options, (error, results) => {
+      if (error) {
+        reject(new Error(String(error)));
+        return;
+      }
+
+      const sorted = (results as unknown as RawMindfulSample[]).slice().sort(
+        (a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+      );
+
+      resolve(sorted);
     });
   });
 }
