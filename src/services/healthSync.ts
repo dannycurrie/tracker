@@ -48,7 +48,7 @@ interface SleepSession {
   id: string;        // UUID of the last-ending asleep sample (dedup key)
   wakeTime: Date;    // max(endDate) across asleep-type samples in group
   sessionStart: Date;
-  durationMinutes: number;
+  elapsedMinutes: number; // wall-clock window: wakeTime − sessionStart
 }
 
 type SyncEntry = {
@@ -150,9 +150,9 @@ export async function syncSleepSessions(): Promise<void> {
   const rawSamples = await querySleepRawSamples(checkpoint);
   const sessions = groupIntoSessions(rawSamples);
 
-  // Overnight sessions: ≥4h total asleep, wake before 10am
+  // Overnight sessions: ≥4h sleep window, wake before 10am
   const overnightSessions = sessions.filter(
-    (s) => s.durationMinutes >= 240 && s.wakeTime.getHours() < 10
+    (s) => s.elapsedMinutes >= 240 && s.wakeTime.getHours() < 10
   );
 
   let submitted = 0;
@@ -260,7 +260,7 @@ async function syncEntriesForMetric(metricId: string, since: Date): Promise<Sync
     return sessions
       .filter(
         (s) =>
-          s.durationMinutes >= 240 &&
+          s.elapsedMinutes >= 240 &&
           s.wakeTime.getHours() < 10 &&
           s.wakeTime.getHours() < 7
       )
@@ -445,13 +445,11 @@ function groupIntoSessions(samples: RawSleepSample[]): SleepSession[] {
 function buildSession(samples: RawSleepSample[]): SleepSession {
   let maxEndMs = -Infinity;
   let minStartMs = Infinity;
-  let totalDurationMs = 0;
   let lastSampleId = samples[0].id;
 
   for (const s of samples) {
     const startMs = new Date(s.startDate).getTime();
     const endMs = new Date(s.endDate).getTime();
-    totalDurationMs += endMs - startMs;
     if (startMs < minStartMs) minStartMs = startMs;
     if (endMs > maxEndMs) {
       maxEndMs = endMs;
@@ -463,6 +461,6 @@ function buildSession(samples: RawSleepSample[]): SleepSession {
     id: lastSampleId,
     wakeTime: new Date(maxEndMs),
     sessionStart: new Date(minStartMs),
-    durationMinutes: totalDurationMs / 60000,
+    elapsedMinutes: (maxEndMs - minStartMs) / 60000,
   };
 }
