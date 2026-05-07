@@ -117,4 +117,19 @@ export const localDb = {
       )
     );
   },
+
+  fetchPeriodLogEntries(metricId: string, periodStart: Date, periodEnd: Date): LogEntry[] {
+    return readEntries()
+      .filter(
+        (e) =>
+          e.metric_id === metricId &&
+          new Date(e.logged_at) >= periodStart &&
+          new Date(e.logged_at) < periodEnd
+      )
+      .sort((a, b) => new Date(b.logged_at).getTime() - new Date(a.logged_at).getTime());
+  },
+
+  deleteLogEntry(id: string): void {
+    writeEntries(readEntries().filter((e) => e.id !== id));
+  },
 };

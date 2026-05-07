@@ -21,7 +21,14 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 export function DashboardScreen({ navigation }: Props) {
   const { metrics, isLoading } = useMetrics();
 
-  const renderItem = ({ item }: { item: Metric }) => <MetricCard metric={item} />;
+  const renderItem = ({ item }: { item: Metric }) => (
+    <TouchableOpacity
+      activeOpacity={1}
+      onPress={() => navigation.navigate('MetricLog', { metricId: item.id })}
+    >
+      <MetricCard metric={item} />
+    </TouchableOpacity>
+  );
 
   return (
     <SafeAreaView style={styles.container}>

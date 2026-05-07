@@ -4,7 +4,7 @@ import { logger } from './logger';
 import { localDb } from './localDb';
 import { isLocalMode } from '../config/mode';
 import { useOfflineQueue } from '../store/offlineQueue';
-import { PendingLogEntry } from '../types';
+import { LogEntry, PendingLogEntry } from '../types';
 import { queryClient } from './queryClient';
 
 export interface InsertLogEntryParams {
@@ -31,6 +31,40 @@ export async function fetchPeriodEntries(
 
   if (error) throw error;
   return data ?? [];
+}
+
+export async function fetchPeriodLogEntries(
+  metricId: string,
+  periodStart: Date,
+  periodEnd: Date
+): Promise<LogEntry[]> {
+  if (isLocalMode) return localDb.fetchPeriodLogEntries(metricId, periodStart, periodEnd);
+
+  const { data, error } = await supabase!
+    .from('log_entries')
+    .select('*')
+    .eq('metric_id', metricId)
+    .gte('logged_at', periodStart.toISOString())
+    .lt('logged_at', periodEnd.toISOString())
+    .order('logged_at', { ascending: false });
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function deleteLogEntry(id: string, metricId: string): Promise<void> {
+  if (isLocalMode) {
+    localDb.deleteLogEntry(id);
+    invalidatePeriodEntries(metricId);
+    return;
+  }
+
+  const { error } = await supabase!.from('log_entries').delete().eq('id', id);
+  if (error) {
+    logger.error('Failed to delete log entry', error, { id });
+    throw error;
+  }
+  invalidatePeriodEntries(metricId);
 }
 
 export async function insertLogEntry(params: InsertLogEntryParams): Promise<void> {
@@ -104,4 +138,5 @@ export async function deleteLogEntriesForPeriod(
 
 function invalidatePeriodEntries(metricId: string): void {
   queryClient.invalidateQueries({ queryKey: ['periodEntries', metricId] });
+  queryClient.invalidateQueries({ queryKey: ['periodLogEntries', metricId] });
 }

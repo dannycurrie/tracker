@@ -3,11 +3,13 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { DashboardScreen } from './DashboardScreen/DashboardScreen';
 import { AddMetricScreen } from './AddMetricScreen/AddMetricScreen';
 import { SettingsScreen } from './SettingsScreen/SettingsScreen';
+import { MetricLogScreen } from './MetricLogScreen/MetricLogScreen';
 
 export type RootStackParamList = {
   Dashboard: undefined;
   AddMetric: undefined;
   Settings: undefined;
+  MetricLog: { metricId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -21,6 +23,7 @@ export function RootStack() {
       <Stack.Screen name="Dashboard" component={DashboardScreen} />
       <Stack.Screen name="AddMetric" component={AddMetricScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
+      <Stack.Screen name="MetricLog" component={MetricLogScreen} />
     </Stack.Navigator>
   );
 }
