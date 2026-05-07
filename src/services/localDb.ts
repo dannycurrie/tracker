@@ -11,6 +11,10 @@ function hoursAgo(h: number): string {
   return new Date(Date.now() - h * 3_600_000).toISOString();
 }
 
+function daysAgo(d: number): string {
+  return new Date(Date.now() - d * 86_400_000).toISOString();
+}
+
 function buildSeedMetrics(): Metric[] {
   return [
     { id: 'mock-1', name: 'Cups of coffee', type: 'cumulative', timeframe: 'weekly',  source: 'user', display_order: 0, created_at: hoursAgo(72) },
@@ -33,6 +37,15 @@ function buildSeedEntries(): LogEntry[] {
     { id: 'mock-log-6', metric_id: 'mock-3', value: 3, logged_at: hoursAgo(6), session_start_at: null, created_at: now },
     { id: 'mock-log-7', metric_id: 'mock-3', value: 4, logged_at: hoursAgo(3), session_start_at: null, created_at: now },
     { id: 'mock-log-8', metric_id: 'mock-3', value: 5, logged_at: hoursAgo(1), session_start_at: null, created_at: now },
+    // Previous-period entries for comparison label feature
+    // Weekly metrics: daysAgo(10-12) always lands in the previous Mon–Sun week
+    { id: 'mock-prev-1', metric_id: 'mock-1', value: 1, logged_at: daysAgo(10), session_start_at: null, created_at: now },
+    { id: 'mock-prev-2', metric_id: 'mock-1', value: 1, logged_at: daysAgo(11), session_start_at: null, created_at: now },
+    { id: 'mock-prev-3', metric_id: 'mock-1', value: 1, logged_at: daysAgo(12), session_start_at: null, created_at: now },
+    { id: 'mock-prev-4', metric_id: 'mock-2', value: 20, logged_at: daysAgo(10), session_start_at: daysAgo(10), created_at: now },
+    // Monthly metric: daysAgo(35-36) always lands in the previous calendar month
+    { id: 'mock-prev-5', metric_id: 'mock-3', value: 7, logged_at: daysAgo(35), session_start_at: null, created_at: now },
+    { id: 'mock-prev-6', metric_id: 'mock-3', value: 8, logged_at: daysAgo(36), session_start_at: null, created_at: now },
   ];
 }
 

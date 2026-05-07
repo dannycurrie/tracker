@@ -23,6 +23,14 @@ export function getPeriodWindow(timeframe: MetricTimeframe, now: Date = new Date
   return { start, end };
 }
 
+export function getPreviousPeriodWindow(
+  timeframe: MetricTimeframe,
+  now: Date = new Date()
+): PeriodWindow {
+  const current = getPeriodWindow(timeframe, now);
+  return getPeriodWindow(timeframe, new Date(current.start.getTime() - 1));
+}
+
 export function formatPeriodLabel(timeframe: MetricTimeframe, now: Date = new Date()): string {
   if (timeframe === 'weekly') {
     const { start, end } = getPeriodWindow('weekly', now);

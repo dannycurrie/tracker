@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { Metric } from '../../types';
 import { usePeriodValue } from '../../hooks/usePeriodValue';
+import { usePreviousPeriodValue } from '../../hooks/usePreviousPeriodValue';
 import { TimerControl } from '../TimerControl/TimerControl';
 import { AverageInput } from '../AverageInput/AverageInput';
 import { insertLogEntry } from '../../services/logEntries';
@@ -14,6 +15,7 @@ interface MetricCardProps {
 
 export function MetricCard({ metric }: MetricCardProps) {
   const { value, isLoading } = usePeriodValue(metric);
+  const { value: prevValue } = usePreviousPeriodValue(metric);
   const [isPending, setIsPending] = useState(false);
 
   const handleIncrement = async () => {
@@ -29,6 +31,14 @@ export function MetricCard({ metric }: MetricCardProps) {
       setIsPending(false);
     }
   };
+
+  const prevLabel = (() => {
+    if (prevValue === null) return null;
+    const ref = metric.timeframe === 'weekly' ? 'last week' : 'last month';
+    if (metric.type === 'timed') return `${prevValue} min ${ref}`;
+    if (metric.type === 'average') return `Avg ${prevValue.toFixed(1)} ${ref}`;
+    return `${prevValue.toFixed(0)} ${ref}`;
+  })();
 
   const displayValue = (() => {
     if (isLoading) return '…';
@@ -47,6 +57,10 @@ export function MetricCard({ metric }: MetricCardProps) {
       </View>
 
       <Text style={[styles.value, isPending && styles.valuePending]}>{displayValue}</Text>
+
+      {prevLabel !== null && (
+        <Text style={styles.prevValue}>{prevLabel}</Text>
+      )}
 
       {metric.type === 'cumulative' && (
         <TouchableOpacity
@@ -98,6 +112,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   value: { fontSize: 36, fontWeight: '700', color: '#111', marginBottom: 12 },
+  prevValue: { fontSize: 13, color: '#888', marginBottom: 10, marginTop: -6 },
   valuePending: { opacity: 0.5 },
   incrementBtn: {
     backgroundColor: '#007AFF',
