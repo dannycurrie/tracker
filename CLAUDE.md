@@ -1,6 +1,6 @@
 # tracker Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-05-07
+Auto-generated from all feature plans. Last updated: 2026-05-09
 
 ## Active Technologies
 - TypeScript, React Native 0.74.5, Expo SDK 51 + react-native-health (already installed), AppState (built-in), react-native-mmkv (checkpoint storage), existing insertLogEntry + deleteLogEntriesForPeriod services (002-apple-health-sync)
@@ -11,6 +11,8 @@ Auto-generated from all feature plans. Last updated: 2026-05-07
 - Supabase `log_entries` table (online); MMKV-backed `localDb` (local mode) (main)
 - TypeScript (React Native 0.74.5, Expo SDK 51) + TanStack Query v5, React Native built-ins (main)
 - Supabase (prod) / MMKV + in-memory localDb (local mode) — read-only for this feature (main)
+- TypeScript (React Native 0.74.5, Expo SDK 51) + TanStack Query v5, React Native built-ins, existing `insertLogEntry` / `deleteLogEntry` services (007-checklist-metric)
+- Supabase `metrics` table (new `checklist_items JSONB` column); MMKV-backed `localDb` (automatic — JSON serialized) (007-checklist-metric)
 
 - TypeScript (React Native 0.73+) + React Native, Expo SDK 51, TanStack Query v5, react-native-mmkv, Supabase JS v2, Zustand, @react-native-community/netinfo (001-habit-metric-tracker)
 
@@ -30,9 +32,9 @@ npm test && npm run lint
 TypeScript (React Native 0.73+): Follow standard conventions
 
 ## Recent Changes
+- 007-checklist-metric: Added TypeScript (React Native 0.74.5, Expo SDK 51) + TanStack Query v5, React Native built-ins, existing `insertLogEntry` / `deleteLogEntry` services
 - main: Added TypeScript (React Native 0.74.5, Expo SDK 51) + TanStack Query v5, React Native built-ins
 - main: Added TypeScript, React Native 0.74.5, Expo SDK 51 + `@react-navigation/native-stack` (already installed), TanStack Query v5 (already installed), existing `fetchPeriodEntries`/`insertLogEntry` services
-- 002-apple-health-sync: Added TypeScript, React Native 0.74.5, Expo SDK 51 + react-native-health (already installed), AppState (built-in), react-native-mmkv (checkpoint storage), existing `insertLogEntry` + `deleteLogEntriesForPeriod` services
 
 
 <!-- MANUAL ADDITIONS START -->

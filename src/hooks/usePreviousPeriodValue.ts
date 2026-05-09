@@ -5,15 +5,17 @@ import { getPreviousPeriodWindow } from '../utils/periods';
 import { computeMean } from '../utils/averageCalc';
 
 export function usePreviousPeriodValue(metric: Metric): { value: number | null } {
+  const isChecklist = metric.type === 'checklist';
   const { start, end } = getPreviousPeriodWindow(metric.timeframe);
 
   const { data } = useQuery({
     queryKey: ['previousPeriodEntries', metric.id, start.toISOString(), end.toISOString()],
     queryFn: () => fetchPeriodEntries(metric.id, start, end),
     staleTime: Infinity,
+    enabled: !isChecklist,
   });
 
-  if (!data || data.length === 0) return { value: null };
+  if (isChecklist || !data || data.length === 0) return { value: null };
 
   const values = data.map((r) => r.value);
   const aggregate =

@@ -1,5 +1,7 @@
 import { createKV } from '../utils/storage';
 import { Metric, LogEntry, MetricType, MetricTimeframe, MetricSource, PendingLogEntry } from '../types';
+import { getPeriodWindow } from '../utils/periods';
+import { stableChecklistItemId } from '../utils/checklist';
 
 const storage = createKV('local-db');
 
@@ -17,14 +19,16 @@ function daysAgo(d: number): string {
 
 function buildSeedMetrics(): Metric[] {
   return [
-    { id: 'mock-1', name: 'Cups of coffee', type: 'cumulative', timeframe: 'weekly',  source: 'user', display_order: 0, created_at: hoursAgo(72) },
-    { id: 'mock-2', name: 'Reading',         type: 'timed',       timeframe: 'weekly',  source: 'user', display_order: 1, created_at: hoursAgo(72) },
-    { id: 'mock-3', name: 'Sleep quality',   type: 'average',     timeframe: 'monthly', source: 'user', display_order: 2, created_at: hoursAgo(72) },
+    { id: 'mock-1', name: 'Cups of coffee', type: 'cumulative', timeframe: 'weekly',  source: 'user', display_order: 0, created_at: hoursAgo(72), checklist_items: null },
+    { id: 'mock-2', name: 'Reading',         type: 'timed',       timeframe: 'weekly',  source: 'user', display_order: 1, created_at: hoursAgo(72), checklist_items: null },
+    { id: 'mock-3', name: 'Sleep quality',   type: 'average',     timeframe: 'monthly', source: 'user', display_order: 2, created_at: hoursAgo(72), checklist_items: null },
+    { id: 'mock-4', name: 'Morning Routine', type: 'checklist',   timeframe: 'weekly',  source: 'user', display_order: 3, created_at: hoursAgo(72), checklist_items: ['Workout', 'Vitamins', 'Cold shower', 'Meditation'] },
   ];
 }
 
 function buildSeedEntries(): LogEntry[] {
   const now = hoursAgo(0);
+  const checklistPeriodStart = getPeriodWindow('weekly').start;
   return [
     // Cups of coffee — 3 taps within the last 6 hours (always in current period)
     { id: 'mock-log-1', metric_id: 'mock-1', value: 1, logged_at: hoursAgo(6),   session_start_at: null, created_at: now },
@@ -46,6 +50,9 @@ function buildSeedEntries(): LogEntry[] {
     // Monthly metric: daysAgo(35-36) always lands in the previous calendar month
     { id: 'mock-prev-5', metric_id: 'mock-3', value: 7, logged_at: daysAgo(35), session_start_at: null, created_at: now },
     { id: 'mock-prev-6', metric_id: 'mock-3', value: 8, logged_at: daysAgo(36), session_start_at: null, created_at: now },
+    // Morning Routine checklist — items 0 (Workout) and 1 (Vitamins) checked in current period
+    { id: stableChecklistItemId('mock-4', 0, checklistPeriodStart), metric_id: 'mock-4', value: 0.25, logged_at: hoursAgo(2), session_start_at: null, created_at: now },
+    { id: stableChecklistItemId('mock-4', 1, checklistPeriodStart), metric_id: 'mock-4', value: 0.25, logged_at: hoursAgo(1), session_start_at: null, created_at: now },
   ];
 }
 
@@ -81,7 +88,7 @@ export const localDb = {
     return readMetrics();
   },
 
-  createMetric(name: string, type: MetricType, timeframe: MetricTimeframe, source: MetricSource = 'user'): Metric {
+  createMetric(name: string, type: MetricType, timeframe: MetricTimeframe, source: MetricSource = 'user', checklistItems?: string[]): Metric {
     const metrics = readMetrics();
     const nextOrder = metrics.length > 0 ? Math.max(...metrics.map((m) => m.display_order)) + 1 : 0;
     const metric: Metric = {
@@ -92,6 +99,7 @@ export const localDb = {
       source,
       display_order: nextOrder,
       created_at: new Date().toISOString(),
+      checklist_items: checklistItems ?? null,
     };
     writeMetrics([...metrics, metric]);
     return metric;
