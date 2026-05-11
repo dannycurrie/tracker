@@ -2,6 +2,7 @@ import AppleHealthKit, {
   HealthKitPermissions,
   HKWorkoutQueriedSampleType,
 } from 'react-native-health';
+import * as Crypto from 'expo-crypto';
 import { isLocalMode } from '../config/mode';
 import { createKV } from '../utils/storage';
 import { getPeriodWindow } from '../utils/periods';
@@ -221,7 +222,7 @@ export async function syncMindfulMinutes(): Promise<void> {
     );
     try {
       await insertLogEntry({
-        id: session.startDate,
+        id: Crypto.randomUUID(),
         metricId: MINDFUL_METRIC_ID,
         value: durationMinutes,
         loggedAt: new Date(session.endDate),
@@ -282,7 +283,7 @@ async function syncEntriesForMetric(metricId: string, since: Date): Promise<Sync
           ) >= 1
       )
       .map((s) => ({
-        id: s.startDate,
+        id: Crypto.randomUUID(),
         value: Math.round(
           (new Date(s.endDate).getTime() - new Date(s.startDate).getTime()) / 60000
         ),
