@@ -32,7 +32,9 @@ export function ChecklistScreen({ route, navigation }: Props) {
   const items = metric.checklist_items ?? [];
 
   async function handleToggle(index: number): Promise<void> {
-    if (isPending !== null) return;
+    if (isPending !== null) {
+      return;
+    }
     setIsPending(index);
     try {
       if (isItemChecked(index)) {

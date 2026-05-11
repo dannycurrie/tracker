@@ -14,6 +14,7 @@ import { RootStackParamList } from '../index';
 import { MetricType, MetricTimeframe } from '../../types';
 import { createMetric } from '../../services/metrics';
 import { queryClient } from '../../services/queryClient';
+import { logger } from '@/src/services/logger';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddMetric'>;
 
@@ -71,7 +72,8 @@ export function AddMetricScreen({ navigation }: Props) {
       await createMetric(name.trim(), type, timeframe, 'user', trimmedItems);
       queryClient.invalidateQueries({ queryKey: ['metrics'] });
       navigation.goBack();
-    } catch {
+    } catch (error) {
+      logger.error('Failed to create metric. Please try again.', error, { name, type, timeframe, checklistItems });
       Alert.alert('Error', 'Could not create metric. Please try again.');
     } finally {
       setIsSubmitting(false);
