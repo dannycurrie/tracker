@@ -8,7 +8,7 @@ export async function fetchUserMetrics(): Promise<Metric[]> {
 
   const { data, error } = await supabase!
     .from('metrics')
-    .select('id, name, type, timeframe, source, display_order, created_at')
+    .select('id, name, type, timeframe, source, display_order, created_at, checklist_items')
     .order('display_order', { ascending: true });
 
   if (error) throw error;
@@ -19,9 +19,10 @@ export async function createMetric(
   name: string,
   type: MetricType,
   timeframe: MetricTimeframe,
-  source: MetricSource = 'user'
+  source: MetricSource = 'user',
+  checklistItems?: string[]
 ): Promise<Metric> {
-  if (isLocalMode) return localDb.createMetric(name, type, timeframe, source);
+  if (isLocalMode) return localDb.createMetric(name, type, timeframe, source, checklistItems);
 
   const { data: existing } = await supabase!
     .from('metrics')
@@ -33,7 +34,14 @@ export async function createMetric(
 
   const { data, error } = await supabase!
     .from('metrics')
-    .insert({ name: name.trim(), type, timeframe, source, display_order: nextOrder })
+    .insert({
+      name: name.trim(),
+      type,
+      timeframe,
+      source,
+      display_order: nextOrder,
+      checklist_items: checklistItems ?? null,
+    })
     .select()
     .single();
 

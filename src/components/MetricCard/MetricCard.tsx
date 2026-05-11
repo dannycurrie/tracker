@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'rea
 import { Metric } from '../../types';
 import { usePeriodValue } from '../../hooks/usePeriodValue';
 import { usePreviousPeriodValue } from '../../hooks/usePreviousPeriodValue';
+import { useChecklistState } from '../../hooks/useChecklistState';
 import { TimerControl } from '../TimerControl/TimerControl';
 import { AverageInput } from '../AverageInput/AverageInput';
 import { insertLogEntry } from '../../services/logEntries';
@@ -16,6 +17,7 @@ interface MetricCardProps {
 export function MetricCard({ metric }: MetricCardProps) {
   const { value, isLoading } = usePeriodValue(metric);
   const { value: prevValue } = usePreviousPeriodValue(metric);
+  const checklistState = useChecklistState(metric);
   const [isPending, setIsPending] = useState(false);
 
   const handleIncrement = async () => {
@@ -41,6 +43,9 @@ export function MetricCard({ metric }: MetricCardProps) {
   })();
 
   const displayValue = (() => {
+    if (metric.type === 'checklist') {
+      return checklistState.isLoading ? '…' : `${checklistState.checkedCount}/${checklistState.totalCount}`;
+    }
     if (isLoading) return '…';
     if (value === null) return metric.type === 'average' ? '—' : '0';
     if (metric.type === 'timed') return `${value} min`;

@@ -24,7 +24,11 @@ export function DashboardScreen({ navigation }: Props) {
   const renderItem = ({ item }: { item: Metric }) => (
     <TouchableOpacity
       activeOpacity={1}
-      onPress={() => navigation.navigate('MetricLog', { metricId: item.id })}
+      onPress={() =>
+        item.type === 'checklist'
+          ? navigation.navigate('Checklist', { metricId: item.id })
+          : navigation.navigate('MetricLog', { metricId: item.id })
+      }
     >
       <MetricCard metric={item} />
     </TouchableOpacity>

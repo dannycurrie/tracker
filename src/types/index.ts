@@ -1,4 +1,4 @@
-export type MetricType = 'cumulative' | 'timed' | 'average';
+export type MetricType = 'cumulative' | 'timed' | 'average' | 'checklist';
 export type MetricTimeframe = 'weekly' | 'monthly';
 export type MetricSource = 'user' | 'apple_health';
 
@@ -10,6 +10,7 @@ export interface Metric {
   source: MetricSource;
   display_order: number;
   created_at: string;
+  checklist_items: string[] | null;
 }
 
 export interface LogEntry {
