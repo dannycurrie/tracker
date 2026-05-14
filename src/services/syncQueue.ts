@@ -40,6 +40,7 @@ export async function drainQueue(): Promise<void> {
     logger.info('Offline queue drained', { count: entries.length });
   }
 
-  // Invalidate all period entry queries so values refresh
+  // Invalidate all period entry queries so values refresh from Supabase
   queryClient.invalidateQueries({ queryKey: ['periodEntries'] });
+  queryClient.invalidateQueries({ queryKey: ['periodLogEntries'] });
 }

@@ -89,7 +89,7 @@ export async function insertLogEntry(params: InsertLogEntryParams): Promise<void
   if (!net.isConnected) {
     logger.info('Offline — queuing log entry', { metricId, value });
     useOfflineQueue.getState().enqueue(entry);
-    invalidatePeriodEntries(metricId);
+    optimisticallyAddEntry(metricId, value);
     return;
   }
 
@@ -105,8 +105,10 @@ export async function insertLogEntry(params: InsertLogEntryParams): Promise<void
   );
 
   if (error) {
-    logger.error('Failed to insert log entry', error, { metricId, value });
-    throw error;
+    logger.error('Failed to insert log entry, queuing for retry', error, { metricId, value });
+    useOfflineQueue.getState().enqueue(entry);
+    optimisticallyAddEntry(metricId, value);
+    return;
   }
   invalidatePeriodEntries(metricId);
 }
@@ -139,4 +141,11 @@ export async function deleteLogEntriesForPeriod(
 function invalidatePeriodEntries(metricId: string): void {
   queryClient.invalidateQueries({ queryKey: ['periodEntries', metricId] });
   queryClient.invalidateQueries({ queryKey: ['periodLogEntries', metricId] });
+}
+
+function optimisticallyAddEntry(metricId: string, value: number): void {
+  queryClient.setQueriesData<{ value: number }[]>(
+    { queryKey: ['periodEntries', metricId] },
+    (old) => (old ?? []).concat({ value })
+  );
 }
