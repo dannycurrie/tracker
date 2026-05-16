@@ -190,6 +190,15 @@ export async function syncSleepSessions(): Promise<void> {
 
 // ─── Mindful sessions ─────────────────────────────────────────────────────────
 
+// Deterministic UUID derived from startDate so re-syncing the same session never creates a duplicate.
+async function mindfulSessionId(startDate: string): Promise<string> {
+  const hash = await Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    `mindful:${startDate}`
+  );
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
+}
+
 export async function syncMindfulMinutes(): Promise<void> {
   if (isLocalMode) return;
 
@@ -222,7 +231,7 @@ export async function syncMindfulMinutes(): Promise<void> {
     );
     try {
       await insertLogEntry({
-        id: Crypto.randomUUID(),
+        id: await mindfulSessionId(session.startDate),
         metricId: MINDFUL_METRIC_ID,
         value: durationMinutes,
         loggedAt: new Date(session.endDate),
@@ -275,21 +284,22 @@ async function syncEntriesForMetric(metricId: string, since: Date): Promise<Sync
 
   if (metricId === MINDFUL_METRIC_ID) {
     const sessions = await queryMindfulSessions(since);
-    return sessions
-      .filter(
-        (s) =>
-          Math.round(
-            (new Date(s.endDate).getTime() - new Date(s.startDate).getTime()) / 60000
-          ) >= 1
-      )
-      .map((s) => ({
-        id: Crypto.randomUUID(),
+    const qualifying = sessions.filter(
+      (s) =>
+        Math.round(
+          (new Date(s.endDate).getTime() - new Date(s.startDate).getTime()) / 60000
+        ) >= 1
+    );
+    return Promise.all(
+      qualifying.map(async (s) => ({
+        id: await mindfulSessionId(s.startDate),
         value: Math.round(
           (new Date(s.endDate).getTime() - new Date(s.startDate).getTime()) / 60000
         ),
         loggedAt: new Date(s.endDate),
         sessionStartAt: s.startDate,
-      }));
+      }))
+    );
   }
 
   logger.info('Unknown apple_health metric — skipping resync', { metricId });
