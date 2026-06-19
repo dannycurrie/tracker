@@ -2,6 +2,7 @@ import NetInfo from '@react-native-community/netinfo';
 import { supabase } from './supabase';
 import { logger } from './logger';
 import { localDb } from './localDb';
+import { offlineCache } from './offlineCache';
 import { isLocalMode } from '../config/mode';
 import { useOfflineQueue } from '../store/offlineQueue';
 import { LogEntry, PendingLogEntry } from '../types';
@@ -22,15 +23,25 @@ export async function fetchPeriodEntries(
 ): Promise<{ value: number }[]> {
   if (isLocalMode) return localDb.fetchPeriodEntries(metricId, periodStart, periodEnd);
 
+  const startIso = periodStart.toISOString();
+  const endIso = periodEnd.toISOString();
+
+  const net = await NetInfo.fetch();
+  if (!net.isConnected) {
+    return offlineCache.getPeriodValues(metricId, startIso, endIso) ?? [];
+  }
+
   const { data, error } = await supabase!
     .from('log_entries')
     .select('value')
     .eq('metric_id', metricId)
-    .gte('logged_at', periodStart.toISOString())
-    .lt('logged_at', periodEnd.toISOString());
+    .gte('logged_at', startIso)
+    .lt('logged_at', endIso);
 
   if (error) throw error;
-  return data ?? [];
+  const values = (data ?? []) as { value: number }[];
+  offlineCache.setPeriodValues(metricId, startIso, endIso, values);
+  return values;
 }
 
 export async function fetchPeriodLogEntries(
@@ -40,22 +51,40 @@ export async function fetchPeriodLogEntries(
 ): Promise<LogEntry[]> {
   if (isLocalMode) return localDb.fetchPeriodLogEntries(metricId, periodStart, periodEnd);
 
+  const startIso = periodStart.toISOString();
+  const endIso = periodEnd.toISOString();
+
+  const net = await NetInfo.fetch();
+  if (!net.isConnected) {
+    return offlineCache.getLogEntries(metricId, startIso, endIso) ?? [];
+  }
+
   const { data, error } = await supabase!
     .from('log_entries')
     .select('*')
     .eq('metric_id', metricId)
-    .gte('logged_at', periodStart.toISOString())
-    .lt('logged_at', periodEnd.toISOString())
+    .gte('logged_at', startIso)
+    .lt('logged_at', endIso)
     .order('logged_at', { ascending: false });
 
   if (error) throw error;
-  return data ?? [];
+  const entries = (data as LogEntry[]) ?? [];
+  offlineCache.setLogEntries(metricId, startIso, endIso, entries);
+  return entries;
 }
 
 export async function deleteLogEntry(id: string, metricId: string): Promise<void> {
   if (isLocalMode) {
     localDb.deleteLogEntry(id);
     invalidatePeriodEntries(metricId);
+    return;
+  }
+
+  const net = await NetInfo.fetch();
+  if (!net.isConnected) {
+    logger.info('Offline — queuing log entry deletion', { id });
+    useOfflineQueue.getState().enqueueDeletion(id);
+    optimisticallyRemoveEntry(id, metricId);
     return;
   }
 
@@ -89,7 +118,7 @@ export async function insertLogEntry(params: InsertLogEntryParams): Promise<void
   if (!net.isConnected) {
     logger.info('Offline — queuing log entry', { metricId, value });
     useOfflineQueue.getState().enqueue(entry);
-    optimisticallyAddEntry(metricId, value);
+    optimisticallyAddEntry(entry);
     return;
   }
 
@@ -107,7 +136,7 @@ export async function insertLogEntry(params: InsertLogEntryParams): Promise<void
   if (error) {
     logger.error('Failed to insert log entry, queuing for retry', error, { metricId, value });
     useOfflineQueue.getState().enqueue(entry);
-    optimisticallyAddEntry(metricId, value);
+    optimisticallyAddEntry(entry);
     return;
   }
   invalidatePeriodEntries(metricId);
@@ -143,9 +172,53 @@ function invalidatePeriodEntries(metricId: string): void {
   queryClient.invalidateQueries({ queryKey: ['periodLogEntries', metricId] });
 }
 
-function optimisticallyAddEntry(metricId: string, value: number): void {
+function optimisticallyAddEntry(entry: PendingLogEntry): void {
   queryClient.setQueriesData<{ value: number }[]>(
-    { queryKey: ['periodEntries', metricId] },
-    (old) => (old ?? []).concat({ value })
+    { queryKey: ['periodEntries', entry.metric_id] },
+    (old) => (old ?? []).concat({ value: entry.value })
   );
+  queryClient.setQueriesData<LogEntry[]>(
+    { queryKey: ['periodLogEntries', entry.metric_id] },
+    (old) => [
+      {
+        id: entry.id,
+        metric_id: entry.metric_id,
+        value: entry.value,
+        logged_at: entry.logged_at,
+        session_start_at: entry.session_start_at,
+        created_at: new Date().toISOString(),
+      },
+      ...(old ?? []),
+    ]
+  );
+}
+
+function optimisticallyRemoveEntry(id: string, metricId: string): void {
+  // Find the entry's value in the in-memory cache before removing it
+  const cached = queryClient.getQueriesData<LogEntry[]>({ queryKey: ['periodLogEntries', metricId] });
+  let removedValue: number | undefined;
+  for (const [, data] of cached) {
+    const found = data?.find((e) => e.id === id);
+    if (found) {
+      removedValue = found.value;
+      break;
+    }
+  }
+
+  queryClient.setQueriesData<LogEntry[]>(
+    { queryKey: ['periodLogEntries', metricId] },
+    (old) => (old ?? []).filter((e) => e.id !== id)
+  );
+
+  if (removedValue !== undefined) {
+    const val = removedValue;
+    queryClient.setQueriesData<{ value: number }[]>(
+      { queryKey: ['periodEntries', metricId] },
+      (old) => {
+        if (!old) return old;
+        const idx = old.findIndex((e) => e.value === val);
+        return idx === -1 ? old : [...old.slice(0, idx), ...old.slice(idx + 1)];
+      }
+    );
+  }
 }
