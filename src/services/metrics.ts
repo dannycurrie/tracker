@@ -1,10 +1,17 @@
+import NetInfo from '@react-native-community/netinfo';
 import { supabase } from './supabase';
 import { localDb } from './localDb';
+import { offlineCache } from './offlineCache';
 import { isLocalMode } from '../config/mode';
 import { Metric, MetricType, MetricTimeframe, MetricSource } from '../types';
 
 export async function fetchUserMetrics(): Promise<Metric[]> {
   if (isLocalMode) return localDb.fetchMetrics();
+
+  const net = await NetInfo.fetch();
+  if (!net.isConnected) {
+    return offlineCache.getMetrics() ?? [];
+  }
 
   const { data, error } = await supabase!
     .from('metrics')
@@ -12,7 +19,9 @@ export async function fetchUserMetrics(): Promise<Metric[]> {
     .order('display_order', { ascending: true });
 
   if (error) throw error;
-  return (data as Metric[]) ?? [];
+  const metrics = (data as Metric[]) ?? [];
+  offlineCache.setMetrics(metrics);
+  return metrics;
 }
 
 export async function createMetric(
@@ -46,5 +55,8 @@ export async function createMetric(
     .single();
 
   if (error) throw error;
-  return data as Metric;
+  const metric = data as Metric;
+  const cached = offlineCache.getMetrics();
+  if (cached) offlineCache.setMetrics([...cached, metric]);
+  return metric;
 }

@@ -6,10 +6,14 @@ import { logger } from './logger';
 
 export async function drainQueue(): Promise<void> {
   if (isLocalMode) return;
-  const entries = useOfflineQueue.getState().dequeueAll();
-  if (entries.length === 0) return;
 
-  const failed = [];
+  const entries = useOfflineQueue.getState().dequeueAll();
+  const deleteIds = useOfflineQueue.getState().dequeueAllDeletions();
+
+  if (entries.length === 0 && deleteIds.length === 0) return;
+
+  const failedEntries: typeof entries = [];
+  const failedDeleteIds: string[] = [];
 
   for (const entry of entries) {
     try {
@@ -26,21 +30,34 @@ export async function drainQueue(): Promise<void> {
       if (error) throw error;
     } catch (err) {
       logger.error('Failed to sync log entry', err, { entryId: entry.id, metricId: entry.metric_id });
-      failed.push(entry);
+      failedEntries.push(entry);
     }
   }
 
-  // Re-enqueue entries that failed to sync
-  if (failed.length > 0) {
-    logger.info('Re-enqueuing failed sync entries', { count: failed.length });
-    for (const entry of failed) {
-      useOfflineQueue.getState().enqueue(entry);
+  for (const id of deleteIds) {
+    try {
+      const { error } = await supabase!.from('log_entries').delete().eq('id', id);
+      if (error) throw error;
+    } catch (err) {
+      logger.error('Failed to sync log entry deletion', err, { id });
+      failedDeleteIds.push(id);
     }
-  } else {
-    logger.info('Offline queue drained', { count: entries.length });
   }
 
-  // Invalidate all period entry queries so values refresh from Supabase
+  if (failedEntries.length > 0) {
+    logger.info('Re-enqueuing failed sync entries', { count: failedEntries.length });
+    for (const entry of failedEntries) useOfflineQueue.getState().enqueue(entry);
+  }
+  if (failedDeleteIds.length > 0) {
+    logger.info('Re-enqueuing failed deletions', { count: failedDeleteIds.length });
+    for (const id of failedDeleteIds) useOfflineQueue.getState().enqueueDeletion(id);
+  }
+
+  logger.info('Offline queue drained', {
+    inserted: entries.length - failedEntries.length,
+    deleted: deleteIds.length - failedDeleteIds.length,
+  });
+
   queryClient.invalidateQueries({ queryKey: ['periodEntries'] });
   queryClient.invalidateQueries({ queryKey: ['periodLogEntries'] });
 }
