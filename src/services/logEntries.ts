@@ -28,7 +28,8 @@ export async function fetchPeriodEntries(
 
   const net = await NetInfo.fetch();
   if (!net.isConnected) {
-    return offlineCache.getPeriodValues(metricId, startIso, endIso) ?? [];
+    const cached = offlineCache.getPeriodValues(metricId, startIso, endIso) ?? [];
+    return [...cached, ...pendingValuesInPeriod(metricId, startIso, endIso)];
   }
 
   const { data, error } = await supabase!
@@ -56,7 +57,14 @@ export async function fetchPeriodLogEntries(
 
   const net = await NetInfo.fetch();
   if (!net.isConnected) {
-    return offlineCache.getLogEntries(metricId, startIso, endIso) ?? [];
+    const pendingDeletes = new Set(useOfflineQueue.getState().pendingDeletes);
+    const cached = (offlineCache.getLogEntries(metricId, startIso, endIso) ?? []).filter(
+      (e) => !pendingDeletes.has(e.id)
+    );
+    const pending = pendingEntriesInPeriod(metricId, startIso, endIso).filter(
+      (e) => !pendingDeletes.has(e.id)
+    );
+    return [...cached, ...pending].sort((a, b) => b.logged_at.localeCompare(a.logged_at));
   }
 
   const { data, error } = await supabase!
@@ -71,6 +79,28 @@ export async function fetchPeriodLogEntries(
   const entries = (data as LogEntry[]) ?? [];
   offlineCache.setLogEntries(metricId, startIso, endIso, entries);
   return entries;
+}
+
+function pendingEntriesInPeriod(metricId: string, startIso: string, endIso: string): LogEntry[] {
+  return useOfflineQueue
+    .getState()
+    .peek()
+    .filter((e) => e.metric_id === metricId && e.logged_at >= startIso && e.logged_at < endIso)
+    .map((e) => ({
+      id: e.id,
+      metric_id: e.metric_id,
+      value: e.value,
+      logged_at: e.logged_at,
+      session_start_at: e.session_start_at,
+      created_at: e.logged_at,
+    }));
+}
+
+function pendingValuesInPeriod(metricId: string, startIso: string, endIso: string): { value: number }[] {
+  const pendingDeletes = new Set(useOfflineQueue.getState().pendingDeletes);
+  return pendingEntriesInPeriod(metricId, startIso, endIso)
+    .filter((e) => !pendingDeletes.has(e.id))
+    .map((e) => ({ value: e.value }));
 }
 
 export async function deleteLogEntry(id: string, metricId: string): Promise<void> {
