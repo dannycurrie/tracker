@@ -4,7 +4,7 @@
 
 **Blocked by:** 01
 
-**Status:** in progress: code done and verified locally against the live DB; Vercel deploy pending
+**Status:** done (2026-10-24). Live at https://tracker-metrics-api.vercel.app
 
 - [x] A missing or wrong `Authorization: Bearer` key returns 401. The key is compared in constant time.
 - [x] `from` and `to` are required and must be ISO-8601 with an offset or `Z`. `from` must be before `to`, and the range can be at most 2 years. A violation returns 400. A future `to` is accepted.
@@ -14,5 +14,5 @@
 - [x] Responses send `Cache-Control: no-store` and no CORS headers.
 - [x] Each request writes one structured JSON log line (method, path, status, duration). The key and response body are never logged.
 - [x] Route tests (Supertest over an injected fake data layer) cover auth, every validation rule, the error shape and the response shape.
-- [ ] There is a Vercel project with Root Directory `server/` and files outside the root included. It deploys to production on push to `main`, and its secrets are set for Production only.
-- [ ] Demo: `curl` against the production URL returns 401 without the key and the metric list with it.
+- [x] There is a Vercel project with Root Directory `server/` and files outside the root included. It deploys to production on push to `main`, and its secrets are set for Production only.
+- [x] Demo: `curl` against the production URL returns 401 without the key and the metric list with it.
