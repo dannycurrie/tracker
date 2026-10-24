@@ -89,7 +89,7 @@ describe('response', () => {
         { id: 'a', name: 'Reading', type: 'timed', timeframe: 'weekly', source: 'user', unit: 'minutes', periods: expect.any(Array) },
         { id: 'b', name: 'Steps', type: 'cumulative', timeframe: 'monthly', source: 'apple_health', unit: null, periods: expect.any(Array) },
         { id: 'c', name: 'Mood', type: 'average', timeframe: 'weekly', source: 'user', unit: null, periods: expect.any(Array) },
-        { id: 'd', name: 'Routine', type: 'checklist', timeframe: 'weekly', source: 'user', unit: null, periods: [] },
+        { id: 'd', name: 'Routine', type: 'checklist', timeframe: 'weekly', source: 'user', unit: null, periods: expect.any(Array) },
       ],
     });
     expect(calls).toEqual([{ createdBefore: new Date('2026-10-24T00:00:00Z') }]);
@@ -128,7 +128,7 @@ describe('response', () => {
   });
 
   it('does not fetch entries when no metric has periods', async () => {
-    const { store, entryCalls } = fakeStore([metricRow({ type: 'checklist', checklist_items: ['a'] })]);
+    const { store, entryCalls } = fakeStore([metricRow({ created_at: '2027-01-01T00:00:00Z' })]);
     const res = await request(buildApp({ store }).app).get(WINDOW).set(auth);
     expect(res.body.metrics[0].periods).toEqual([]);
     expect(entryCalls).toEqual([]);

@@ -1,4 +1,5 @@
 import { computeMean } from '../../src/utils/averageCalc';
+import { stableChecklistItemId } from '../../src/utils/checklist';
 import { formatInZone, PeriodWindow, periodsOverlapping } from './periods';
 import { LogEntryRow, MetricRow } from './store';
 import { TimeWindow } from './window';
@@ -8,13 +9,16 @@ export interface MetricPlan {
   periods: PeriodWindow[];
 }
 
-export interface PeriodSummary {
+interface BasePeriodSummary {
   start: string;
   end: string;
   partial: boolean;
   entryCount: number;
-  value: number | null;
 }
+
+export type PeriodSummary =
+  | (BasePeriodSummary & { value: number | null })
+  | (BasePeriodSummary & { value: number; total: number; items: { label: string; checked: boolean }[] });
 
 /**
  * Works out which periods each metric reports, plus the single window of log
@@ -50,27 +54,43 @@ export function summarisePeriods(
   const own = entries.filter((e) => e.metric_id === plan.metric.id);
 
   return plan.periods.map((period) => {
-    const values = own
-      .filter((e) => {
-        const t = Date.parse(e.logged_at);
-        return t >= period.start.getTime() && t < period.end.getTime();
-      })
-      .map((e) => e.value);
-
-    return {
+    const inPeriod = own.filter((e) => {
+      const t = Date.parse(e.logged_at);
+      return t >= period.start.getTime() && t < period.end.getTime();
+    });
+    const base = {
       start: formatInZone(period.start, tz),
       end: formatInZone(period.end, tz),
       partial: period.start < window.from || period.end > window.to,
-      entryCount: values.length,
+      entryCount: inPeriod.length,
+    };
+
+    if (plan.metric.type === 'checklist') {
+      return { ...base, ...checklistState(plan.metric, period, inPeriod) };
+    }
+    const values = inPeriod.map((e) => e.value);
+    return {
+      ...base,
       value: plan.metric.type === 'average' ? computeMean(values) : values.reduce((acc, v) => acc + v, 0),
     };
   });
 }
 
-function reportedPeriods(metric: MetricRow, window: TimeWindow, tz: string): PeriodWindow[] {
-  // Checklist periods arrive in ticket 04.
-  if (metric.type === 'checklist') return [];
+/**
+ * Mirrors the app's useChecklistState: item i is checked when the period holds an
+ * entry whose id is the stable id for (metric, i, period start). The period start
+ * must be the exact instant the device computed, which is why periods use USER_TZ.
+ */
+function checklistState(metric: MetricRow, period: PeriodWindow, entries: LogEntryRow[]) {
+  const ids = new Set(entries.map((e) => e.id));
+  const items = (Array.isArray(metric.checklist_items) ? metric.checklist_items : []).map((label, i) => ({
+    label,
+    checked: ids.has(stableChecklistItemId(metric.id, i, period.start)),
+  }));
+  return { value: items.filter((item) => item.checked).length, total: items.length, items };
+}
 
+function reportedPeriods(metric: MetricRow, window: TimeWindow, tz: string): PeriodWindow[] {
   const createdAt = Date.parse(metric.created_at);
   return periodsOverlapping(metric.timeframe, window.from, window.to, tz).filter(
     (p) => p.end.getTime() > createdAt

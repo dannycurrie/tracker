@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { stableChecklistItemId } from '../../src/utils/checklist';
 import { planPeriods, summarisePeriods } from '../src/aggregate';
+import { getPeriodWindow } from '../src/periods';
 import { entry, metricRow } from './helpers';
 
 const TZ = 'Europe/London';
@@ -84,6 +86,70 @@ describe('planPeriods', () => {
 
   it('has no fetch window when no metric reports periods', () => {
     expect(planPeriods([], window, TZ).fetchWindow).toBeNull();
-    expect(planPeriods([metricRow({ type: 'checklist', checklist_items: ['a'] })], window, TZ).fetchWindow).toBeNull();
+    expect(planPeriods([metricRow({ created_at: '2027-01-01T00:00:00Z' })], window, TZ).fetchWindow).toBeNull();
+  });
+});
+
+describe('checklist periods', () => {
+  const items = ['Stretch', 'Journal', 'Cold shower'];
+  const m = metricRow({ id: 'gym', type: 'checklist', checklist_items: items });
+  // Weeks of 12 Oct and 19 Oct 2026, as the app on a London device would compute them.
+  const week1 = getPeriodWindow('weekly', new Date('2026-10-14T12:00:00Z'), TZ).start;
+  const week2 = getPeriodWindow('weekly', new Date('2026-10-21T12:00:00Z'), TZ).start;
+  const tick = (idx: number, periodStart: Date, loggedAt: string) =>
+    entry('gym', loggedAt, 1 / items.length, stableChecklistItemId('gym', idx, periodStart));
+
+  it('reports checked count, total and item states per period', () => {
+    const periods = summarise(m, [
+      tick(0, week1, '2026-10-13T07:00:00Z'),
+      tick(2, week1, '2026-10-16T07:00:00Z'),
+      tick(1, week2, '2026-10-20T07:00:00Z'),
+    ]);
+
+    expect(periods).toEqual([
+      {
+        start: '2026-10-12T00:00:00+01:00',
+        end: '2026-10-19T00:00:00+01:00',
+        partial: true,
+        entryCount: 2,
+        value: 2,
+        total: 3,
+        items: [
+          { label: 'Stretch', checked: true },
+          { label: 'Journal', checked: false },
+          { label: 'Cold shower', checked: true },
+        ],
+      },
+      expect.objectContaining({ entryCount: 1, value: 1, total: 3 }),
+    ]);
+    expect(periods[1]).toMatchObject({ items: [{ checked: false }, { checked: true }, { checked: false }] });
+  });
+
+  it('reports all and none checked', () => {
+    const periods = summarise(m, [0, 1, 2].map((i) => tick(i, week1, '2026-10-13T07:00:00Z')));
+    expect(periods.map((p) => p.value)).toEqual([3, 0]);
+  });
+
+  it("does not count a tick whose id belongs to another period", () => {
+    // Logged inside week 2 but keyed to week 1's start: the app would not show it as checked in week 2.
+    const periods = summarise(m, [tick(0, week1, '2026-10-20T07:00:00Z')]);
+    expect(periods.map((p) => [p.entryCount, p.value])).toEqual([[0, 0], [1, 0]]);
+  });
+
+  it("ignores other metrics' entries even with a matching id", () => {
+    const stray = { ...tick(0, week1, '2026-10-13T07:00:00Z'), metric_id: 'other' };
+    expect(summarise(m, [stray]).map((p) => p.value)).toEqual([0, 0]);
+  });
+
+  it('misses every tick when the period start is computed in the wrong timezone', () => {
+    // Guards the reason periods use USER_TZ: a UTC-midnight start produces different ids.
+    const utcMonday = new Date('2026-10-12T00:00:00Z');
+    const periods = summarise(m, [0, 1, 2].map((i) => tick(i, utcMonday, '2026-10-13T07:00:00Z')));
+    expect(periods[0]).toMatchObject({ entryCount: 3, value: 0 });
+  });
+
+  it('handles a checklist with no items', () => {
+    const periods = summarise(metricRow({ id: 'gym', type: 'checklist', checklist_items: null }), []);
+    expect(periods[0]).toMatchObject({ value: 0, total: 0, items: [] });
   });
 });

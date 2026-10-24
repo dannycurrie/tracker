@@ -1,6 +1,6 @@
 # PRD: Metrics API
 
-**Status**: Approved design. Live DB checked 2026-10-24.
+**Status**: Shipped 2026-10-24. Live at https://tracker-metrics-api.vercel.app
 **Date**: 2026-10-24
 **Branch**: `008-metrics-api`
 
