@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
-import { auth, buildApp, fakeStore, metricRow, API_KEY } from './helpers';
+import { auth, buildApp, entry, fakeStore, metricRow, API_KEY } from './helpers';
 
 const WINDOW = '/v1/metrics?from=2026-10-01T00:00:00Z&to=2026-10-24T00:00:00Z';
 
@@ -71,7 +71,7 @@ describe('window validation', () => {
 });
 
 describe('response', () => {
-  it('returns every metric in store order with units and empty periods', async () => {
+  it('returns every metric in store order with units', async () => {
     const { store, calls } = fakeStore([
       metricRow({ id: 'a', name: 'Reading', type: 'timed', display_order: 0 }),
       metricRow({ id: 'b', name: 'Steps', type: 'cumulative', timeframe: 'monthly', source: 'apple_health', display_order: 1 }),
@@ -86,13 +86,52 @@ describe('response', () => {
       to: '2026-10-24T00:00:00.000Z',
       timezone: 'Europe/London',
       metrics: [
-        { id: 'a', name: 'Reading', type: 'timed', timeframe: 'weekly', source: 'user', unit: 'minutes', periods: [] },
-        { id: 'b', name: 'Steps', type: 'cumulative', timeframe: 'monthly', source: 'apple_health', unit: null, periods: [] },
-        { id: 'c', name: 'Mood', type: 'average', timeframe: 'weekly', source: 'user', unit: null, periods: [] },
+        { id: 'a', name: 'Reading', type: 'timed', timeframe: 'weekly', source: 'user', unit: 'minutes', periods: expect.any(Array) },
+        { id: 'b', name: 'Steps', type: 'cumulative', timeframe: 'monthly', source: 'apple_health', unit: null, periods: expect.any(Array) },
+        { id: 'c', name: 'Mood', type: 'average', timeframe: 'weekly', source: 'user', unit: null, periods: expect.any(Array) },
         { id: 'd', name: 'Routine', type: 'checklist', timeframe: 'weekly', source: 'user', unit: null, periods: [] },
       ],
     });
     expect(calls).toEqual([{ createdBefore: new Date('2026-10-24T00:00:00Z') }]);
+  });
+
+  it('returns period values computed from the store, fetching entries once', async () => {
+    const { store, entryCalls } = fakeStore(
+      [
+        metricRow({ id: 'w', type: 'timed', timeframe: 'weekly' }),
+        metricRow({ id: 'mo', type: 'average', timeframe: 'monthly' }),
+      ],
+      [
+        entry('w', '2026-10-13T08:00:00Z', 30),
+        entry('w', '2026-10-16T08:00:00Z', 15),
+        entry('mo', '2026-10-02T08:00:00Z', 4),
+        entry('mo', '2026-10-20T08:00:00Z', 5),
+      ]
+    );
+    const { app, logs } = buildApp({ store });
+    const res = await request(app)
+      .get('/v1/metrics?from=2026-10-12T00:00:00%2B01:00&to=2026-10-19T00:00:00%2B01:00')
+      .set(auth);
+
+    expect(res.status).toBe(200);
+    const [weekly, monthly] = res.body.metrics;
+    expect(weekly.periods).toEqual([
+      { start: '2026-10-12T00:00:00+01:00', end: '2026-10-19T00:00:00+01:00', partial: false, entryCount: 2, value: 45 },
+    ]);
+    expect(monthly.periods).toEqual([
+      { start: '2026-10-01T00:00:00+01:00', end: '2026-11-01T00:00:00+00:00', partial: true, entryCount: 2, value: 4.5 },
+    ]);
+    expect(entryCalls).toEqual([
+      { metricIds: ['w', 'mo'], from: new Date('2026-09-30T23:00:00Z'), to: new Date('2026-11-01T00:00:00Z') },
+    ]);
+    expect(logs[0].periodCount).toBe(2);
+  });
+
+  it('does not fetch entries when no metric has periods', async () => {
+    const { store, entryCalls } = fakeStore([metricRow({ type: 'checklist', checklist_items: ['a'] })]);
+    const res = await request(buildApp({ store }).app).get(WINDOW).set(auth);
+    expect(res.body.metrics[0].periods).toEqual([]);
+    expect(entryCalls).toEqual([]);
   });
 
   it('returns an empty list when there are no metrics', async () => {
@@ -115,6 +154,7 @@ describe('errors', () => {
       listMetrics: async () => {
         throw new Error('connection refused to db.internal:5432');
       },
+      listLogEntries: async () => [],
     };
     const res = await request(buildApp({ store }).app).get(WINDOW).set(auth);
 
@@ -147,7 +187,7 @@ describe('logging', () => {
     await request(app).get(WINDOW);
 
     expect(logs).toEqual([
-      { method: 'GET', path: '/v1/metrics', status: 200, durationMs: expect.any(Number) },
+      { method: 'GET', path: '/v1/metrics', status: 200, durationMs: expect.any(Number), periodCount: 0 },
       { method: 'GET', path: '/v1/metrics', status: 401, durationMs: expect.any(Number) },
     ]);
     expect(JSON.stringify(logs)).not.toContain(API_KEY);

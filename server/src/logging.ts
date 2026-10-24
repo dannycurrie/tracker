@@ -5,6 +5,8 @@ export interface RequestLogEntry {
   path: string;
   status: number;
   durationMs: number;
+  /** Periods returned, for successful metrics requests. */
+  periodCount?: number;
 }
 
 export type LogSink = (entry: RequestLogEntry) => void;
@@ -23,6 +25,7 @@ export function requestLogger(sink: LogSink): RequestHandler {
         path: req.path,
         status: res.statusCode,
         durationMs: Number((process.hrtime.bigint() - start) / 1_000_000n),
+        ...(typeof res.locals.periodCount === 'number' && { periodCount: res.locals.periodCount }),
       });
     });
     next();

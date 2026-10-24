@@ -1,4 +1,5 @@
 import express, { ErrorRequestHandler, Express } from 'express';
+import { PeriodSummary, planPeriods, summarisePeriods } from './aggregate';
 import { requireApiKey } from './auth';
 import { Config, ConfigResult } from './config';
 import { ApiError, sendError } from './errors';
@@ -33,14 +34,19 @@ export function createApp({ config, makeStore, log = stdoutSink }: AppDeps): Exp
   const store = makeStore(config.config);
 
   app.get('/v1/metrics', requireApiKey(apiKey), async (req, res) => {
-    const { from, to } = parseWindow(req.query);
-    const metrics = await store.listMetrics({ createdBefore: to });
+    const window = parseWindow(req.query);
+    const metrics = await store.listMetrics({ createdBefore: window.to });
+    const { plans, fetchWindow } = planPeriods(metrics, window, timezone);
+    const entries = fetchWindow
+      ? await store.listLogEntries({ metricIds: metrics.map((m) => m.id), ...fetchWindow })
+      : [];
 
+    res.locals.periodCount = plans.reduce((n, p) => n + p.periods.length, 0);
     res.json({
-      from: from.toISOString(),
-      to: to.toISOString(),
+      from: window.from.toISOString(),
+      to: window.to.toISOString(),
       timezone,
-      metrics: metrics.map(toMetricResponse),
+      metrics: plans.map((plan) => toMetricResponse(plan.metric, summarisePeriods(plan, entries, window, timezone))),
     });
   });
 
@@ -61,7 +67,7 @@ export function createApp({ config, makeStore, log = stdoutSink }: AppDeps): Exp
   return app;
 }
 
-function toMetricResponse(metric: MetricRow) {
+function toMetricResponse(metric: MetricRow, periods: PeriodSummary[]) {
   return {
     id: metric.id,
     name: metric.name,
@@ -69,6 +75,6 @@ function toMetricResponse(metric: MetricRow) {
     timeframe: metric.timeframe,
     source: metric.source,
     unit: metric.type === 'timed' ? 'minutes' : null,
-    periods: [],
+    periods,
   };
 }

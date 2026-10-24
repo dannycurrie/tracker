@@ -1,7 +1,7 @@
 import { createApp } from '../src/app';
 import { Config, ConfigResult } from '../src/config';
 import { RequestLogEntry } from '../src/logging';
-import { MetricRow, MetricsStore } from '../src/store';
+import { LogEntryRow, MetricRow, MetricsStore } from '../src/store';
 
 export const API_KEY = 'test-api-key-0123456789abcdefghijklmnop';
 
@@ -26,15 +26,27 @@ export function metricRow(overrides: Partial<MetricRow> = {}): MetricRow {
   };
 }
 
-export function fakeStore(metrics: MetricRow[] = []) {
+export function entry(metricId: string, loggedAt: string, value: number, id = `${metricId}@${loggedAt}`): LogEntryRow {
+  return { id, metric_id: metricId, value, logged_at: loggedAt };
+}
+
+export function fakeStore(metrics: MetricRow[] = [], entries: LogEntryRow[] = []) {
   const calls: { createdBefore: Date }[] = [];
+  const entryCalls: { metricIds: string[]; from: Date; to: Date }[] = [];
   const store: MetricsStore = {
     async listMetrics(options) {
       calls.push(options);
       return metrics;
     },
+    async listLogEntries(options) {
+      entryCalls.push(options);
+      return entries.filter((e) => {
+        const t = Date.parse(e.logged_at);
+        return options.metricIds.includes(e.metric_id) && t >= options.from.getTime() && t < options.to.getTime();
+      });
+    },
   };
-  return { store, calls };
+  return { store, calls, entryCalls };
 }
 
 export function buildApp({
