@@ -10,3 +10,4 @@ Tickets are tracer-bullet vertical slices, numbered in dependency order. A ticke
 | 02 ✅ | [Tracer bullet: authenticated `/v1/metrics` on Vercel](02-tracer-bullet-endpoint.md) | 01 ✅ |
 | 03 ✅ | [Period buckets with sum and average values](03-period-buckets.md) | 02 ✅ |
 | 04 ✅ | [Checklist metrics](04-checklist-metrics.md) | 03 ✅ |
+| 05 | [Daily granularity](05-daily-granularity.md) | 04 ✅ |

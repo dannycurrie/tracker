@@ -1,5 +1,8 @@
 import type { MetricTimeframe } from '../../src/types';
 
+/** A metric's own timeframe, or a single calendar day for `granularity=day`. */
+export type BucketSize = MetricTimeframe | 'daily';
+
 export interface PeriodWindow {
   start: Date;
   end: Date;
@@ -20,14 +23,19 @@ interface WallClock extends CivilDate {
 const HOUR_MS = 3_600_000;
 
 /**
- * The period of `timeframe` containing `instant`, with boundaries at local
- * midnight in `tz`: weekly runs Monday to Monday, monthly the 1st to the 1st.
- * Matches the app's `getPeriodWindow` run on a device set to `tz`.
+ * The period of `size` containing `instant`, with boundaries at local midnight in
+ * `tz`: daily runs midnight to midnight (23 or 25 hours on DST days), weekly Monday
+ * to Monday, monthly the 1st to the 1st. For weekly and monthly this matches the
+ * app's `getPeriodWindow` run on a device set to `tz`.
  */
-export function getPeriodWindow(timeframe: MetricTimeframe, instant: Date, tz: string): PeriodWindow {
+export function getPeriodWindow(size: BucketSize, instant: Date, tz: string): PeriodWindow {
   const today = wallClock(instant, tz);
 
-  if (timeframe === 'weekly') {
+  if (size === 'daily') {
+    return { start: startOfDay(today, tz), end: startOfDay(addDays(today, 1), tz) };
+  }
+
+  if (size === 'weekly') {
     const weekday = new Date(Date.UTC(today.year, today.month - 1, today.day)).getUTCDay(); // 0=Sun
     const monday = addDays(today, -((weekday + 6) % 7));
     return { start: startOfDay(monday, tz), end: startOfDay(addDays(monday, 7), tz) };
@@ -39,10 +47,10 @@ export function getPeriodWindow(timeframe: MetricTimeframe, instant: Date, tz: s
   return { start: startOfDay(first, tz), end: startOfDay(next, tz) };
 }
 
-/** Every period of `timeframe` that overlaps the half-open window [from, to), oldest first. */
-export function periodsOverlapping(timeframe: MetricTimeframe, from: Date, to: Date, tz: string): PeriodWindow[] {
+/** Every period of `size` that overlaps the half-open window [from, to), oldest first. */
+export function periodsOverlapping(size: BucketSize, from: Date, to: Date, tz: string): PeriodWindow[] {
   const periods: PeriodWindow[] = [];
-  for (let p = getPeriodWindow(timeframe, from, tz); p.start < to; p = getPeriodWindow(timeframe, p.end, tz)) {
+  for (let p = getPeriodWindow(size, from, tz); p.start < to; p = getPeriodWindow(size, p.end, tz)) {
     periods.push(p);
   }
   return periods;

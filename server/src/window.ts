@@ -5,7 +5,10 @@ export interface TimeWindow {
   to: Date;
 }
 
+export type Granularity = 'period' | 'day';
+
 const MAX_RANGE_YEARS = 2;
+const GRANULARITIES: readonly Granularity[] = ['period', 'day'];
 
 // Date-time with an explicit offset or Z. Date-only and offset-less strings are
 // rejected because their timezone would be ambiguous.
@@ -27,6 +30,14 @@ export function parseWindow(query: Record<string, unknown>): TimeWindow {
   }
 
   return { from, to };
+}
+
+/** `period` (the default) buckets by each metric's own timeframe; `day` by calendar day. */
+export function parseGranularity(query: Record<string, unknown>): Granularity {
+  const raw = query.granularity;
+  if (raw === undefined) return 'period';
+  if (typeof raw === 'string' && (GRANULARITIES as readonly string[]).includes(raw)) return raw as Granularity;
+  throw new ApiError(400, 'invalid_granularity', `\`granularity\` must be one of: ${GRANULARITIES.join(', ')}`);
 }
 
 function parseTimestamp(query: Record<string, unknown>, name: 'from' | 'to'): Date {

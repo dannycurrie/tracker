@@ -85,6 +85,7 @@ describe('response', () => {
       from: '2026-10-01T00:00:00.000Z',
       to: '2026-10-24T00:00:00.000Z',
       timezone: 'Europe/London',
+      granularity: 'period',
       metrics: [
         { id: 'a', name: 'Reading', type: 'timed', timeframe: 'weekly', source: 'user', unit: 'minutes', periods: expect.any(Array) },
         { id: 'b', name: 'Steps', type: 'cumulative', timeframe: 'monthly', source: 'apple_health', unit: null, periods: expect.any(Array) },

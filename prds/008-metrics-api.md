@@ -26,7 +26,7 @@ One user: the app's owner, calling from scripts and tools.
 
 ## Endpoint
 
-`GET /v1/metrics?from=<ISO-8601>&to=<ISO-8601>`
+`GET /v1/metrics?from=<ISO-8601>&to=<ISO-8601>[&granularity=period|day]`
 
 ### Authentication
 
@@ -39,6 +39,7 @@ One user: the app's owner, calling from scripts and tools.
 |---|---|---|
 | `from` | yes | ISO-8601 with an offset or `Z` |
 | `to` | yes | ISO-8601 with an offset or `Z`. Must be after `from`. Can be in the future. |
+| `granularity` | no | `period` (the default) or `day`. See [Granularity](#granularity). |
 
 - The window is half-open, `[from, to)`, the same as the app's `gte`/`lt` queries.
 - The longest allowed range is **2 years**.
@@ -55,6 +56,7 @@ One user: the app's owner, calling from scripts and tools.
   "from": "2026-10-01T00:00:00Z",
   "to": "2026-10-24T00:00:00Z",
   "timezone": "Europe/London",
+  "granularity": "period",
   "metrics": [
     {
       "id": "…",
@@ -106,7 +108,7 @@ The body is always `{ "error": { "code": string, "message": string } }`. Supabas
 
 | Status | When |
 |---|---|
-| 400 | A parameter is missing or malformed, `from >= to`, or the range is over 2 years |
+| 400 | A parameter is missing or malformed, `from >= to`, the range is over 2 years, or `granularity` isn't `period` or `day` (`invalid_granularity`) |
 | 401 | The `Authorization` header is missing or the key is wrong |
 | 500 | Any other failure, including a missing server config |
 
@@ -121,6 +123,16 @@ The body is always `{ "error": { "code": string, "message": string } }`. Supabas
 - Periods that end before the metric's `created_at` are left out.
 - A metric created after `to` doesn't appear in the response.
 - Every other metric appears, in `display_order`, including metrics with no entries.
+
+### Granularity
+
+Added in ticket 05 for `week-review`, which counts the days a habit was logged.
+
+- `granularity=period` (the default) gives the period buckets described above. Without the parameter, responses are the same as before apart from the new top-level `granularity` field.
+- `granularity=day` gives `cumulative`, `timed` and `average` metrics one bucket per **calendar day in `USER_TZ`**, from local midnight to the next local midnight. DST days are whole local days: the clocks-forward Sunday is 23 hours and the clocks-back Sunday is 25 hours. Day buckets follow the same rules as periods: whole-day values, `partial`, `entryCount`, the `created_at` cutoff, and the same value per type.
+- **Checklists ignore it.** Ticks are keyed to the start of the metric's own period, so a checklist can't be split by day. Checklist metrics return their own timeframe buckets at either granularity.
+- The response echoes the granularity it applied in a top-level `granularity` field, so a caller can tell an older server that ignores the parameter.
+- For any whole week, the day buckets' `value` and `entryCount` add up to the week's period bucket for `cumulative` and `timed` metrics. Daily averages don't add up that way, so weight them by `entryCount`.
 
 ### Values
 

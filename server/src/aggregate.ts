@@ -1,8 +1,8 @@
 import { computeMean } from '../../src/utils/averageCalc';
 import { stableChecklistItemId } from '../../src/utils/checklist';
-import { formatInZone, PeriodWindow, periodsOverlapping } from './periods';
+import { BucketSize, formatInZone, PeriodWindow, periodsOverlapping } from './periods';
 import { LogEntryRow, MetricRow } from './store';
-import { TimeWindow } from './window';
+import { Granularity, TimeWindow } from './window';
 
 export interface MetricPlan {
   metric: MetricRow;
@@ -28,9 +28,13 @@ export type PeriodSummary =
 export function planPeriods(
   metrics: MetricRow[],
   window: TimeWindow,
-  tz: string
+  tz: string,
+  granularity: Granularity = 'period'
 ): { plans: MetricPlan[]; fetchWindow: TimeWindow | null } {
-  const plans = metrics.map((metric) => ({ metric, periods: reportedPeriods(metric, window, tz) }));
+  const plans = metrics.map((metric) => ({
+    metric,
+    periods: reportedPeriods(metric, bucketSize(metric, granularity), window, tz),
+  }));
 
   const all = plans.flatMap((p) => p.periods);
   const fetchWindow =
@@ -90,9 +94,14 @@ function checklistState(metric: MetricRow, period: PeriodWindow, entries: LogEnt
   return { value: items.filter((item) => item.checked).length, total: items.length, items };
 }
 
-function reportedPeriods(metric: MetricRow, window: TimeWindow, tz: string): PeriodWindow[] {
+// Checklist ticks are keyed to the start of the metric's own period, so they can't be split by day.
+function bucketSize(metric: MetricRow, granularity: Granularity): BucketSize {
+  return granularity === 'day' && metric.type !== 'checklist' ? 'daily' : metric.timeframe;
+}
+
+function reportedPeriods(metric: MetricRow, size: BucketSize, window: TimeWindow, tz: string): PeriodWindow[] {
   const createdAt = Date.parse(metric.created_at);
-  return periodsOverlapping(metric.timeframe, window.from, window.to, tz).filter(
+  return periodsOverlapping(size, window.from, window.to, tz).filter(
     (p) => p.end.getTime() > createdAt
   );
 }

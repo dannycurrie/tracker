@@ -7,7 +7,7 @@ Production: `https://tracker-metrics-api.vercel.app`
 ## Endpoint
 
 ```
-GET /v1/metrics?from=<ISO-8601>&to=<ISO-8601>
+GET /v1/metrics?from=<ISO-8601>&to=<ISO-8601>[&granularity=period|day]
 Authorization: Bearer <API_KEY>
 ```
 
@@ -36,13 +36,23 @@ Every metric created before `to`, in `display_order`. Each metric has a `periods
 | `average` | Mean to 1 decimal place, or `null` if there are no entries | |
 | `checklist` | Number of checked items | `total`, `items: [{ label, checked }]` |
 
+### Granularity
+
+`granularity` is optional and is echoed in the response's top-level `granularity` field.
+
+- `period` (the default): each metric is bucketed by its own timeframe, as above.
+- `day`: `cumulative`, `timed` and `average` metrics get one bucket per calendar day in `USER_TZ`, from local midnight to the next local midnight. The clocks-forward Sunday is 23 hours and the clocks-back Sunday is 25. Buckets have the same shape and rules as periods.
+- **Checklists ignore it** and always use their own timeframe, because ticks are keyed to the period start.
+
+Over a whole week, day buckets add up to the weekly bucket for sums. For averages, weight each day's mean by its `entryCount`.
+
 ### Errors
 
 The body is always `{ "error": { "code", "message" } }`.
 
 | Status | Codes |
 |---|---|
-| 400 | `missing_parameter`, `invalid_timestamp`, `invalid_range`, `range_too_large` |
+| 400 | `missing_parameter`, `invalid_timestamp`, `invalid_range`, `range_too_large`, `invalid_granularity` |
 | 401 | `unauthorized` |
 | 404 | `not_found` |
 | 500 | `internal_error`, `server_misconfigured` |

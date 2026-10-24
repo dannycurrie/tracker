@@ -5,7 +5,7 @@ import { Config, ConfigResult } from './config';
 import { ApiError, sendError } from './errors';
 import { LogSink, requestLogger, stdoutSink } from './logging';
 import { MetricRow, MetricsStore } from './store';
-import { parseWindow } from './window';
+import { parseGranularity, parseWindow } from './window';
 
 export interface AppDeps {
   config: ConfigResult;
@@ -35,8 +35,9 @@ export function createApp({ config, makeStore, log = stdoutSink }: AppDeps): Exp
 
   app.get('/v1/metrics', requireApiKey(apiKey), async (req, res) => {
     const window = parseWindow(req.query);
+    const granularity = parseGranularity(req.query);
     const metrics = await store.listMetrics({ createdBefore: window.to });
-    const { plans, fetchWindow } = planPeriods(metrics, window, timezone);
+    const { plans, fetchWindow } = planPeriods(metrics, window, timezone, granularity);
     const entries = fetchWindow
       ? await store.listLogEntries({ metricIds: metrics.map((m) => m.id), ...fetchWindow })
       : [];
@@ -46,6 +47,7 @@ export function createApp({ config, makeStore, log = stdoutSink }: AppDeps): Exp
       from: window.from.toISOString(),
       to: window.to.toISOString(),
       timezone,
+      granularity,
       metrics: plans.map((plan) => toMetricResponse(plan.metric, summarisePeriods(plan, entries, window, timezone))),
     });
   });
