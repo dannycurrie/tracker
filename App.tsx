@@ -8,6 +8,9 @@ import { isLocalMode } from './src/config/mode';
 import { logger } from './src/services/logger';
 import { RootStack } from './src/screens';
 import { useHealthSync } from './src/hooks/useHealthSync';
+import { configureTimerNotifications } from './src/services/timerNotifications';
+
+configureTimerNotifications();
 
 export default function App() {
   const [sessionReady, setSessionReady] = useState(false);

@@ -5,6 +5,7 @@ import { Metric } from '../../types';
 import { useTimer, formatElapsed } from '../../hooks/useTimer';
 import { insertLogEntry } from '../../services/logEntries';
 import { useTimerStore } from '../../store/timerStore';
+import { scheduleTimerReminder, cancelTimerReminder } from '../../services/timerNotifications';
 
 interface TimerControlProps {
   metric: Metric;
@@ -14,8 +15,14 @@ export function TimerControl({ metric }: TimerControlProps) {
   const { isRunning, elapsedMs, start, stop } = useTimer(metric.id);
   const startedAt = useTimerStore((s) => s.timers[metric.id]?.startedAt ?? null);
 
+  const handleStart = () => {
+    start();
+    void scheduleTimerReminder(metric.id, metric.name);
+  };
+
   const handleStop = async () => {
     const elapsed = stop();
+    void cancelTimerReminder(metric.id);
     const minutes = Math.floor(elapsed / 60_000);
     if (minutes < 1) return; // Don't log sub-minute sessions
     await insertLogEntry({
@@ -33,7 +40,7 @@ export function TimerControl({ metric }: TimerControlProps) {
       )}
       <View style={styles.row}>
         {!isRunning ? (
-          <TouchableOpacity style={styles.startBtn} onPress={start}>
+          <TouchableOpacity style={styles.startBtn} onPress={handleStart}>
             <Text style={styles.startBtnText}>▶ Start</Text>
           </TouchableOpacity>
         ) : (
